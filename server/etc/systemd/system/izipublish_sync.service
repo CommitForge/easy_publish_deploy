@@ -1,0 +1,6 @@
+[Unit]
+Description=Sync Update Chain Script
+
+[Service]
+Type=oneshot
+ExecStart=sh /root/izipublish/cron/izipublish_sync.sh
