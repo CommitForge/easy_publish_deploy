@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Sync Update Chain every 20 seconds
+
+[Timer]
+OnBootSec=20
+OnUnitActiveSec=20
+AccuracySec=1
+
+[Install]
+WantedBy=timers.target
