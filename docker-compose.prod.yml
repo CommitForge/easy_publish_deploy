@@ -1,0 +1,76 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-devdb}
+      POSTGRES_USER: ${POSTGRES_USER:-dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dev} -d ${POSTGRES_DB:-devdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    profiles: ["backend", "all"]
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      args:
+        BACKEND_SOURCE_DIR: ${TARGET_DIR:-./repos}/easy_publish_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BACKEND_INTERNAL_PORT: ${BACKEND_INTERNAL_PORT:-8081}
+      SERVER_PORT: ${BACKEND_INTERNAL_PORT:-8081}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://db:5432/devdb}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-dev}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-dev}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Djava.awt.headless=true}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8081}:${BACKEND_INTERNAL_PORT:-8081}"
+    profiles: ["backend", "all"]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        FRONTEND_SOURCE_DIR: ${TARGET_DIR:-./repos}/easy_publish_frontend
+        CLI_SOURCE_REPO: ${CLI_SOURCE_REPO:-CommitForge/easy_publish_cli}
+        CLI_SOURCE_REF: ${CLI_SOURCE_REF:-main}
+        CLI_STRIP_VITE_COMPAT: ${CLI_STRIP_VITE_COMPAT:-true}
+        VITE_PACKAGE_ID: ${VITE_PACKAGE_ID}
+        VITE_MODULE_ID: ${VITE_MODULE_ID}
+        VITE_CLOCK_ID: ${VITE_CLOCK_ID}
+        VITE_CONTAINER_CHAIN_ID: ${VITE_CONTAINER_CHAIN_ID}
+        VITE_DATA_ITEM_CHAIN_ID: ${VITE_DATA_ITEM_CHAIN_ID}
+        VITE_DATA_ITEM_VERIFICATION_CHAIN_ID: ${VITE_DATA_ITEM_VERIFICATION_CHAIN_ID}
+        VITE_UPDATE_CHAIN_ID: ${VITE_UPDATE_CHAIN_ID}
+        VITE_IOTA_EXPLORER_OBJECT: ${VITE_IOTA_EXPLORER_OBJECT}
+        VITE_IOTA_EXPLORER_NETWORK: ${VITE_IOTA_EXPLORER_NETWORK}
+        VITE_IOTA_EXPLORER_TXBLOCK: ${VITE_IOTA_EXPLORER_TXBLOCK}
+        VITE_PRIMARY_DOMAIN: ${VITE_PRIMARY_DOMAIN}
+        VITE_APP_INSTANCE_NAME: ${VITE_APP_INSTANCE_NAME}
+        VITE_APP_INSTANCE_DOMAIN: ${VITE_APP_INSTANCE_DOMAIN}
+        VITE_API_BASE: ${VITE_API_BASE}
+        VITE_API_WS_BASE: ${VITE_API_WS_BASE}
+        VITE_API_BASE_PATH: ${VITE_API_BASE_PATH}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_NGINX_PORT:-8080}:80"
+    profiles: ["frontend", "all"]
+
+volumes:
+  db_data:

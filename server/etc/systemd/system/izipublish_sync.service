@@ -1,6 +1,9 @@
 [Unit]
-Description=Sync Update Chain Script
+Description=Easy Publish Update Chain Sync Trigger
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=sh /root/izipublish/cron/izipublish_sync.sh
+EnvironmentFile=-/etc/default/izipublish_sync
+ExecStart=/usr/bin/env bash -lc "${IZIPUBLISH_SYNC_SCRIPT:-/root/izipublish/cron/izipublish_sync.sh}"

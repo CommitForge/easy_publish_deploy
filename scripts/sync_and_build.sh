@@ -1,23 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 BUILD=false
 DEPLOY=false
-TARGET_BRANCH="${TARGET_BRANCH:-main}"
-TARGET_DIR="${TARGET_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/repos}"
+DEPLOY_PRODUCT="${DEPLOY_PRODUCT:-all}"
 
-BACKEND_REPO="${BACKEND_REPO:-git@github.com:CommitForge/easy_publish_backend.git}"
-FRONTEND_REPO="${FRONTEND_REPO:-git@github.com:CommitForge/easy_publish_frontend.git}"
-CLI_REPO="${CLI_REPO:-git@github.com:CommitForge/easy_publish_cli.git}"
+SYNC_BACKEND=true
+SYNC_FRONTEND=true
+SYNC_CLI=true
+
+TARGET_BRANCH="${TARGET_BRANCH:-main}"
+TARGET_DIR="${TARGET_DIR:-$ROOT_DIR/repos}"
+
+BACKEND_REPO="${BACKEND_REPO:-https://github.com/CommitForge/easy_publish_backend.git}"
+FRONTEND_REPO="${FRONTEND_REPO:-https://github.com/CommitForge/easy_publish_frontend.git}"
+CLI_REPO="${CLI_REPO:-https://github.com/CommitForge/easy_publish_cli.git}"
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--build] [--deploy]
+Usage: $(basename "$0") [options]
 
 Options:
-  --build      Build checked-out projects after sync
-  --deploy     Run deploy placeholder after sync/build
-  -h, --help   Show this help
+  --build                    Build checked-out projects after sync
+  --deploy                   Deploy with scripts/deploy.sh after sync/build
+  --deploy-product NAME      Deploy scope: backend | frontend | all (default: all)
+  --no-backend               Skip backend checkout/build
+  --no-frontend              Skip frontend checkout/build
+  --no-cli                   Skip CLI checkout/build
+  --target-dir DIR           Override checkout directory
+  --branch BRANCH            Override branch (default: TARGET_BRANCH or main)
+  -h, --help                 Show this help
 
 Environment overrides:
   TARGET_DIR, TARGET_BRANCH
@@ -27,9 +41,37 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --build) BUILD=true ;;
-    --deploy) DEPLOY=true ;;
-    -h|--help) usage; exit 0 ;;
+    --build)
+      BUILD=true
+      ;;
+    --deploy)
+      DEPLOY=true
+      ;;
+    --deploy-product)
+      shift
+      DEPLOY_PRODUCT="${1:-}"
+      ;;
+    --no-backend)
+      SYNC_BACKEND=false
+      ;;
+    --no-frontend)
+      SYNC_FRONTEND=false
+      ;;
+    --no-cli)
+      SYNC_CLI=false
+      ;;
+    --target-dir)
+      shift
+      TARGET_DIR="${1:-}"
+      ;;
+    --branch)
+      shift
+      TARGET_BRANCH="${1:-}"
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
     *)
       echo "Unknown option: $1" >&2
       usage
@@ -39,10 +81,19 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+if [[ -z "$DEPLOY_PRODUCT" ]]; then
+  echo "--deploy-product requires a value: backend | frontend | all" >&2
+  exit 1
+fi
+
+if [[ "$TARGET_DIR" != /* ]]; then
+  TARGET_DIR="$ROOT_DIR/${TARGET_DIR#./}"
+fi
+
 mkdir -p "$TARGET_DIR"
 
-echo "Using target dir: $TARGET_DIR"
-echo "Using branch: $TARGET_BRANCH"
+echo "[sync] Target dir: $TARGET_DIR"
+echo "[sync] Branch: $TARGET_BRANCH"
 
 sync_repo() {
   local name="$1"
@@ -100,25 +151,31 @@ build_node_project_if_possible() {
   fi
 }
 
-deploy_placeholder() {
-  cat <<MSG
-[deploy] Placeholder only.
-Add your systemd/docker/nginx deployment steps here later.
-MSG
-}
-
-sync_repo "easy_publish_backend" "$BACKEND_REPO"
-sync_repo "easy_publish_frontend" "$FRONTEND_REPO"
-sync_repo "easy_publish_cli" "$CLI_REPO"
+if [[ "$SYNC_BACKEND" == "true" ]]; then
+  sync_repo "easy_publish_backend" "$BACKEND_REPO"
+fi
+if [[ "$SYNC_FRONTEND" == "true" ]]; then
+  sync_repo "easy_publish_frontend" "$FRONTEND_REPO"
+fi
+if [[ "$SYNC_CLI" == "true" ]]; then
+  sync_repo "easy_publish_cli" "$CLI_REPO"
+fi
 
 if [[ "$BUILD" == "true" ]]; then
-  build_backend
-  build_node_project_if_possible "$TARGET_DIR/easy_publish_frontend" "Frontend"
-  build_node_project_if_possible "$TARGET_DIR/easy_publish_cli" "CLI"
+  if [[ "$SYNC_BACKEND" == "true" ]]; then
+    build_backend
+  fi
+  if [[ "$SYNC_FRONTEND" == "true" ]]; then
+    build_node_project_if_possible "$TARGET_DIR/easy_publish_frontend" "Frontend"
+  fi
+  if [[ "$SYNC_CLI" == "true" ]]; then
+    build_node_project_if_possible "$TARGET_DIR/easy_publish_cli" "CLI"
+  fi
 fi
 
 if [[ "$DEPLOY" == "true" ]]; then
-  deploy_placeholder
+  echo "[deploy] Delegating to scripts/deploy.sh (product=$DEPLOY_PRODUCT)"
+  "$ROOT_DIR/scripts/deploy.sh" --product "$DEPLOY_PRODUCT"
 fi
 
-echo "Done."
+echo "[sync] Done."

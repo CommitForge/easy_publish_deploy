@@ -1,0 +1,14 @@
+# Local environment files
+.env
+.env.local
+
+# Synced project checkouts
+repos/
+
+# Build outputs
+artifacts/
+
+# OS/editor
+.DS_Store
+*.swp
+.codex
