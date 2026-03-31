@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Sync Update Chain every 20 seconds
+Description=Poll Easy Publish sync status every 20 seconds
 
 [Timer]
 OnBootSec=20

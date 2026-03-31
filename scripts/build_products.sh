@@ -84,7 +84,7 @@ build_backend_artifact() {
   elif command -v mvn >/dev/null 2>&1; then
     (cd "$dir" && mvn -DskipTests package)
   elif command -v docker >/dev/null 2>&1; then
-    (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace maven:3.9.9-eclipse-temurin-22 mvn -DskipTests package)
+    (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace maven:3.9.9-eclipse-temurin-25 mvn -DskipTests package)
   else
     echo "[build-products] Maven is required (mvn, mvnw, or docker fallback)." >&2
     exit 1

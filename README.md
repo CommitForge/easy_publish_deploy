@@ -10,7 +10,7 @@ This repo now includes:
 - Docker Compose for both dev and production-style runs
 - scripts to deploy `backend`, `frontend`, or `all` separately
 - scripts to build backend/frontend artifacts separately
-- optional `systemd` timer setup for periodic chain sync
+- optional `systemd` timer setup for periodic sync-status probing
 
 ## Disclaimer And Responsibility
 
@@ -76,8 +76,9 @@ Key groups in `.env.example`:
 - repo sync (`TARGET_DIR`, repo URLs, branch)
 - ports and DB config
 - backend Spring datasource/runtime
+- backend on-chain scheduler + IOTA RPC + offchain index controls
 - frontend `VITE_*` values
-- sync timer chain IDs and endpoint
+- shared chain IDs and optional sync-status probe values
 
 ## Quick Start (Dev)
 
@@ -165,6 +166,7 @@ Outputs:
 
 - backend jar: `artifacts/backend/easypublish.jar`
 - frontend static build: `artifacts/frontend/dist`
+- backend target runtime is Java 25 (Docker build paths in this repo use Temurin 25)
 
 ## Deployment Script (Backend/Frontend/All)
 
@@ -182,6 +184,12 @@ Useful flags:
 - `--no-sync`
 - `--no-detach`
 - `--frontend-help`
+
+Backend sync note:
+
+- manual `POST /izipublish/update-chain/sync` trigger is removed in latest backend
+- on-chain sync is now scheduled inside backend (`app.onchain-sync.*`)
+- compose injects scheduler chain IDs from `.env` (`CONTAINER_CHAIN_ID`, `UPDATE_CHAIN_ID`, `DATA_ITEM_CHAIN_ID`, `DATA_ITEM_VERIFICATION_CHAIN_ID`)
 
 ## Frontend Deployment Help
 
@@ -213,5 +221,6 @@ See:
 
 - `server/README.md`
 
-Hardcoded paths and IDs were removed from the sync trigger script.
-Use `/etc/default/izipublish_sync` (template included in `server/etc/default/izipublish_sync`) to configure endpoint/chain IDs/script path.
+Hardcoded paths and IDs were removed from the sync probe script.
+The optional `systemd` job now polls `/api/sync/{chainObjectId}` for status visibility.
+Use `/etc/default/izipublish_sync` (template included in `server/etc/default/izipublish_sync`) to configure URL/chain ID/script path.

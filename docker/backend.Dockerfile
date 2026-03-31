@@ -1,4 +1,4 @@
-FROM maven:3.9.9-eclipse-temurin-22 AS build
+FROM maven:3.9.9-eclipse-temurin-25 AS build
 
 ARG BACKEND_SOURCE_DIR=./repos/easy_publish_backend
 WORKDIR /src
@@ -13,7 +13,7 @@ RUN mvn -DskipTests package && \
     test -n "$APP_JAR" && \
     cp "$APP_JAR" /tmp/app.jar
 
-FROM eclipse-temurin:22-jre-jammy
+FROM eclipse-temurin:25-jre-jammy
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG NODE_MAJOR=22

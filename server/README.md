@@ -1,8 +1,9 @@
 # Server Timer/Cron Wiring
 
-This directory contains optional `systemd` files for periodically triggering:
+Backend on-chain sync is now internal (`app.onchain-sync.*` in backend config).
+This directory contains optional `systemd` files for periodically probing sync status:
 
-- `POST /izipublish/update-chain/sync`
+- `GET /izipublish/api/sync/{chainObjectId}`
 
 ## Files
 
@@ -25,7 +26,7 @@ sudo cp server/etc/systemd/system/izipublish_sync.timer /etc/systemd/system/
 sudo cp server/etc/default/izipublish_sync /etc/default/izipublish_sync
 ```
 
-2. Edit `/etc/default/izipublish_sync` values (`SYNC_BACKEND_BASE_URL`, chain IDs, optional script path).
+2. Edit `/etc/default/izipublish_sync` values (`SYNC_BACKEND_BASE_URL`, `SYNC_STATUS_CHAIN_ID`, timeout, optional script path).
 
 3. Enable timer:
 
@@ -40,3 +41,5 @@ sudo systemctl enable --now izipublish_sync.timer
 sudo systemctl status izipublish_sync.timer
 sudo systemctl status izipublish_sync.service
 ```
+
+The probe prints the JSON response from `/api/sync/{chainObjectId}`.

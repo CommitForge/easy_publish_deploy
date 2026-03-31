@@ -1,5 +1,5 @@
 [Unit]
-Description=Easy Publish Update Chain Sync Trigger
+Description=Easy Publish Sync Status Probe
 After=network-online.target
 Wants=network-online.target
 
