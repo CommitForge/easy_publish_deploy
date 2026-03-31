@@ -2,12 +2,55 @@
 
 Deployment orchestration repo for Easy Publish projects.
 
+## TLDR
+
+Run everything from this repo root (no extra `cd` steps needed):
+
+1. Install requirements (Debian/Ubuntu):
+
+```bash
+./scripts/requirements_linux.sh --install
+```
+
+This installs/checks:
+
+- `bash`, `git`, `curl`, `ca-certificates`
+- `docker.io` (if Docker is missing)
+- `docker-compose-plugin` (or `docker-compose` fallback)
+- adds your sudo user to `docker` group (log out/in may be required)
+
+2. Build/setup workspace (creates `.env` if missing + checks out/updates repos):
+
+```bash
+./scripts/build.sh
+```
+
+3. Run dev stack (`db + backend + frontend`):
+
+```bash
+./scripts/run_dev.sh
+```
+
+4. Optional production-style deploy:
+
+```bash
+./scripts/deploy.sh --product all
+```
+
+Quick stop:
+
+```bash
+./scripts/compose.sh dev down
+```
+
 This repo now includes:
 
 - repository sync helpers for backend/frontend/cli
 - root `.env` configuration for local and deployment flows
 - Dockerfiles for backend and frontend
 - Docker Compose for both dev and production-style runs
+- one-step build/setup wrapper (`scripts/build.sh`)
+- one-step dev run wrapper (`scripts/run_dev.sh`)
 - scripts to deploy `backend`, `frontend`, or `all` separately
 - scripts to build backend/frontend artifacts separately
 - optional `systemd` timer setup for periodic sync-status probing
@@ -31,6 +74,8 @@ The repository author/maintainer is not responsible or liable for any direct or 
 - `docker/frontend.Dockerfile`
 - `docker-compose.dev.yml`
 - `docker-compose.prod.yml`
+- `scripts/build.sh`
+- `scripts/run_dev.sh`
 - `scripts/bootstrap.sh`
 - `scripts/requirements_linux.sh`
 - `scripts/smoke_test.sh`
@@ -63,6 +108,13 @@ Install requirements on Debian/Ubuntu:
 ./scripts/requirements_linux.sh --install
 ```
 
+Install mode uses apt and installs:
+
+- `bash`, `git`, `curl`, `ca-certificates`
+- `docker.io` (if missing)
+- `docker-compose-plugin` (or `docker-compose` fallback)
+- docker group membership for your sudo user (when available)
+
 ## Environment File
 
 A local `.env` is required. Defaults are provided:
@@ -90,17 +142,17 @@ Key groups in `.env.example`:
 ./scripts/requirements_linux.sh --install
 ```
 
-2. Bootstrap once:
+2. Build/setup once:
 
 ```bash
 chmod +x scripts/*.sh
-./scripts/bootstrap.sh
+./scripts/build.sh
 ```
 
 3. Start full dev stack (db + backend + frontend):
 
 ```bash
-./scripts/compose.sh dev up --profile all --build --detach
+./scripts/run_dev.sh
 ```
 
 4. View logs:
@@ -114,6 +166,8 @@ chmod +x scripts/*.sh
 ```bash
 ./scripts/compose.sh dev down
 ```
+
+`scripts/bootstrap.sh` is still available as a compatibility alias to `scripts/build.sh`.
 
 ## Smoke Test
 
@@ -177,6 +231,8 @@ Deploy products separately with Docker Compose (prod file):
 ./scripts/deploy.sh --product frontend
 ./scripts/deploy.sh --product all
 ```
+
+`deploy.sh` now delegates to `scripts/compose.sh` (prod mode) so compose behavior stays unified in one place.
 
 Useful flags:
 

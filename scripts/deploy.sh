@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
-COMPOSE_FILE="$ROOT_DIR/docker-compose.prod.yml"
 
 PRODUCT="all"
 BUILD=true
@@ -109,26 +108,14 @@ set -a
 source "$ENV_FILE"
 set +a
 
-if [[ "${TARGET_DIR:-}" == "" ]]; then
-  TARGET_DIR="$ROOT_DIR/repos"
-elif [[ "$TARGET_DIR" != /* ]]; then
-  TARGET_DIR="$ROOT_DIR/${TARGET_DIR#./}"
-fi
-
 case "$PRODUCT" in
   backend)
-    sync_args=(--no-frontend --no-cli)
-    services=(db backend)
     profile="backend"
     ;;
   frontend)
-    sync_args=(--no-backend --no-cli)
-    services=(frontend)
     profile="frontend"
     ;;
   all)
-    sync_args=(--no-cli)
-    services=(db backend frontend)
     profile="all"
     ;;
   *)
@@ -137,33 +124,19 @@ case "$PRODUCT" in
     ;;
 esac
 
-if [[ "$SYNC" == "true" ]]; then
-  echo "[deploy] Syncing repositories (product=$PRODUCT)"
-  TARGET_DIR="${TARGET_DIR:-$ROOT_DIR/repos}" "$ROOT_DIR/scripts/sync_and_build.sh" "${sync_args[@]}"
-fi
-
-if docker compose version >/dev/null 2>&1; then
-  compose_bin=(docker compose)
-elif command -v docker-compose >/dev/null 2>&1; then
-  compose_bin=(docker-compose)
-else
-  echo "Neither 'docker compose' nor 'docker-compose' is available." >&2
-  exit 1
-fi
-
-compose_cmd=("${compose_bin[@]}" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" --profile "$profile")
-
+cmd=("$ROOT_DIR/scripts/compose.sh" prod up --profile "$profile")
 if [[ "$BUILD" == "true" ]]; then
-  echo "[deploy] Building images: ${services[*]}"
-  "${compose_cmd[@]}" build "${services[@]}"
+  cmd+=(--build)
+fi
+if [[ "$DETACH" == "true" ]]; then
+  cmd+=(--detach)
+fi
+if [[ "$SYNC" == "false" ]]; then
+  cmd+=(--no-sync)
 fi
 
-echo "[deploy] Starting services: ${services[*]}"
-if [[ "$DETACH" == "true" ]]; then
-  "${compose_cmd[@]}" up -d "${services[@]}"
-else
-  "${compose_cmd[@]}" up "${services[@]}"
-fi
+echo "[deploy] Running: ${cmd[*]}"
+ENV_FILE="$ENV_FILE" "${cmd[@]}"
 
 echo "[deploy] Done for product=$PRODUCT"
 
