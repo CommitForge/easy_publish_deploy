@@ -1,6 +1,7 @@
 # Easy Publish Deploy
 
 Deployment orchestration repo for Easy Publish projects.
+Work in progress: setup/scripts may still evolve.
 
 ## TLDR
 
@@ -95,6 +96,13 @@ Required tools:
 - `docker`
 - `docker compose` plugin or `docker-compose`
 - Docker daemon running + user access to the Docker socket/group
+
+Dependency note (Node + IOTA SDK):
+
+- In the default Docker flow (`./scripts/run_dev.sh` or `./scripts/deploy.sh`), host Node.js is not required.
+- Backend sync uses Node scripts inside the backend runtime, and those scripts use `@iota/iota-sdk`.
+- `@iota/iota-sdk` is installed from backend Node dependencies (`repos/easy_publish_backend/node/package.json`) during build/setup, not as a separate system package.
+- If you run backend sync natively on host (outside Docker), then host `node`/`npm` are required.
 
 Check requirements:
 
