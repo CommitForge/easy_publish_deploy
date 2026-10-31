@@ -397,6 +397,15 @@ restored with:
 ./scripts/deploy-backend-existing.sh --rollback
 ```
 
+If a legacy interrupted deployment has left **no** backend container to
+inspect or roll back, recover only with the explicit bootstrap command. It
+uses the server-local config file and loopback port documented in `.env.example`;
+it never prints the configuration values:
+
+```bash
+./scripts/deploy-backend-existing.sh --bootstrap
+```
+
 For a different container/image name, set the documented `BACKEND_*` values in
 the server-local `.env`. Otherwise, one command deploys both products, running
 the backend replacement before switching the frontend symlink:

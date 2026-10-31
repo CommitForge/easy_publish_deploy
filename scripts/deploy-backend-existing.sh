@@ -11,6 +11,7 @@ IMAGE_NAME=""
 SYNC=true
 BUILD=true
 DRY_RUN=false
+BOOTSTRAP=false
 WAIT_SECONDS="${BACKEND_START_WAIT_SECONDS:-12}"
 
 BUILD_CONTEXT=""
@@ -30,12 +31,15 @@ Options:
   --no-sync               Build the existing backend checkout without Git sync
   --no-build              Reuse the named image; only replace the container
   --dry-run               Validate and print the plan without changing Docker
+  --bootstrap             Create the missing backend container from explicit
+                          server-local bootstrap settings; never implicit
   --rollback              Restore <container>-previous and exit
   -h, --help              Show this help
 
 Examples:
   ./scripts/deploy-backend-existing.sh
   ./scripts/deploy-backend-existing.sh --dry-run
+  ./scripts/deploy-backend-existing.sh --bootstrap
   ./scripts/deploy-backend-existing.sh --rollback
 USAGE
 }
@@ -88,6 +92,10 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=true
       shift
       ;;
+    --bootstrap)
+      BOOTSTRAP=true
+      shift
+      ;;
     --rollback)
       ROLLBACK=true
       shift
@@ -122,6 +130,7 @@ WAIT_SECONDS="${BACKEND_START_WAIT_SECONDS:-$WAIT_SECONDS}"
 
 [[ "$CONTAINER_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die "Invalid container name."
 [[ "$WAIT_SECONDS" =~ ^[1-9][0-9]*$ ]] || die "BACKEND_START_WAIT_SECONDS must be a positive integer."
+[[ "$BOOTSTRAP" == "false" || "$ROLLBACK" == "false" ]] || die "--bootstrap and --rollback cannot be used together."
 
 container_exists() {
   docker container inspect "$1" >/dev/null 2>&1
@@ -316,6 +325,37 @@ restore_previous_container() {
   die "$message The previous backend was restored."
 }
 
+bootstrap_missing_container() {
+  local config_path bind_address host_port container_port
+  config_path="${BACKEND_CONFIG_PATH:-/opt/app/izipublish/application.properties}"
+  bind_address="${BACKEND_BIND_ADDRESS:-127.0.0.1}"
+  host_port="${BACKEND_HOST_PORT:-8081}"
+  container_port="${BACKEND_CONTAINER_PORT:-8081}"
+
+  [[ "$config_path" == /* && -f "$config_path" ]] || die "Bootstrap config file is missing or not an absolute file path."
+  [[ "$bind_address" != *,* && "$host_port" =~ ^[1-9][0-9]*$ && "$container_port" =~ ^[1-9][0-9]*$ ]] || die "Invalid bootstrap network settings."
+  container_exists "$CONTAINER_NAME" && die "Backend container already exists: $CONTAINER_NAME"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "[backend-deploy] DRY RUN: would create the missing backend container from server-local bootstrap settings."
+    return 0
+  fi
+
+  docker image inspect "$IMAGE_NAME" >/dev/null || die "Image does not exist: $IMAGE_NAME"
+  echo "[backend-deploy] Creating missing backend container from server-local settings"
+  docker run -d --name "$CONTAINER_NAME" \
+    --publish "$bind_address:$host_port:$container_port" \
+    --mount "type=bind,src=$config_path,dst=/app/application.properties,readonly" \
+    "$IMAGE_NAME" >/dev/null || die "Could not create the backend container."
+
+  if ! wait_for_running; then
+    docker rm -f "$CONTAINER_NAME" >/dev/null || true
+    die "New bootstrap container stopped during startup; it was removed."
+  fi
+
+  echo "[backend-deploy] Backend is running."
+}
+
 replace_container() {
   local previous_name
   previous_name="$(previous_container_name)"
@@ -355,6 +395,11 @@ replace_container() {
 
 if [[ "$ROLLBACK" == "true" ]]; then
   rollback
+  exit 0
+fi
+
+if [[ "$BOOTSTRAP" == "true" ]]; then
+  bootstrap_missing_container
   exit 0
 fi
 
