@@ -16,7 +16,7 @@ RUN mvn -DskipTests package && \
 FROM eclipse-temurin:25-jre-jammy
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG NODE_MAJOR=22
+ARG NODE_MAJOR=24
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

@@ -63,7 +63,7 @@ services:
     profiles: ["backend", "all"]
 
   frontend:
-    image: node:22-bullseye
+    image: node:24-bookworm
     working_dir: /workspace
     restart: unless-stopped
     env_file:

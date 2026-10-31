@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 
 ARG FRONTEND_SOURCE_DIR=./repos/easy_publish_frontend
 WORKDIR /app

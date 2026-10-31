@@ -118,9 +118,9 @@ build_frontend_artifact() {
     fi
   elif command -v docker >/dev/null 2>&1; then
     if [[ -f "$dir/package-lock.json" ]]; then
-      (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace node:22-bullseye sh -lc "npm ci && npm run build")
+      (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace node:24-bookworm sh -lc "npm ci && npm run build")
     else
-      (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace node:22-bullseye sh -lc "npm install && npm run build")
+      (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace node:24-bookworm sh -lc "npm install && npm run build")
     fi
   else
     echo "[build-products] npm is required (npm or docker fallback)." >&2
