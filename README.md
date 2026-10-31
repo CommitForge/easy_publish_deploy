@@ -83,6 +83,7 @@ The repository author/maintainer is not responsible or liable for any direct or 
 - `scripts/sync_and_build.sh`
 - `scripts/compose.sh`
 - `scripts/build_products.sh`
+- `scripts/build_all.sh`
 - `scripts/deploy.sh`
 - `server/...` (optional timer/service files)
 
@@ -93,6 +94,7 @@ Required tools:
 - `bash`
 - `git`
 - `curl`
+- `rsync`
 - `docker`
 - `docker compose` plugin or `docker-compose`
 - Docker daemon running + user access to the Docker socket/group
@@ -118,7 +120,7 @@ Install requirements on Debian/Ubuntu:
 
 Install mode uses apt and installs:
 
-- `bash`, `git`, `curl`, `ca-certificates`
+- `bash`, `git`, `curl`, `rsync`, `ca-certificates`
 - `docker.io` (if missing)
 - `docker-compose-plugin` (or `docker-compose` fallback)
 - docker group membership for your sudo user (when available)
@@ -230,7 +232,70 @@ Outputs:
 - frontend static build: `artifacts/frontend/dist`
 - backend target runtime is Java 25 (Docker build paths in this repo use Temurin 25)
 
-## Deployment Script (Backend/Frontend/All)
+## Build Everything
+
+Use the aggregate build wrapper to check the same production Docker build that
+deployment uses. It builds backend and frontend images, and also builds the
+sibling Move package automatically when `../easy_publish_movevm` is present.
+It does **not** update Git checkouts unless you explicitly request it:
+
+```bash
+./scripts/build_all.sh
+```
+
+Useful variants:
+
+```bash
+# First update the deployment checkout, matching the deployment sync behavior.
+./scripts/build_all.sh --sync
+
+# Build only one deployment product.
+./scripts/build_all.sh --product backend
+
+# Build the GraalVM backend executable and the production frontend image.
+./scripts/build_all.sh --native
+
+# Faster native build that skips native tests.
+./scripts/build_all.sh --native-fast
+
+# Run the regular production Docker build and then the native backend build.
+./scripts/build_all.sh --both --sync
+```
+
+The native modes require host Maven and GraalVM's `native-image` command. Their
+output is copied to `artifacts/backend/`; the normal Java build only needs the
+same Docker setup as deployment. Use `--with-move` to require the Move build,
+`--no-move` to skip it, or `--move-dir DIR` for a package in another location.
+When a configured source checkout is outside this repository (including the
+current `repos/` symlinks), the compose wrapper stages only the needed source
+files in a temporary ignored directory so Docker can build them safely.
+
+Every run ends with a status table and lists its actual local artifacts. For a
+successful Java or `both` build, follow the printed manual Compose commands to
+start exactly the images just built without rebuilding or syncing. Native
+executable artifacts are not yet consumed by the Compose deployment.
+
+To build the active projects next to this deployment repository (including
+uncommitted local edits) rather than the `repos/` deployment checkout, use:
+
+```bash
+./scripts/build_all.sh --workspace
+```
+
+Workspace mode never runs Git sync; `--sync` and `--workspace` cannot be used
+together.
+
+To remove only generated build output before reviewing or pushing changes, use:
+
+```bash
+./scripts/build_all.sh --workspace --clean
+```
+
+Cleanup removes the ignored backend `target/`, frontend `dist/`, Move `build/`,
+deployment `artifacts/`, and abandoned temporary Docker contexts. It does not
+delete source files, Git data, `node_modules`, or Docker images.
+
+## Docker Compose Deployment (Local or Compose-Managed Servers)
 
 Deploy products separately with Docker Compose (prod file):
 
@@ -254,6 +319,90 @@ Backend sync note:
 - manual `POST /izipublish/update-chain/sync` trigger is removed in latest backend
 - on-chain sync is now scheduled inside backend (`app.onchain-sync.*`)
 - compose injects scheduler chain IDs from `.env` (`CONTAINER_CHAIN_ID`, `UPDATE_CHAIN_ID`, `DATA_ITEM_CHAIN_ID`, `DATA_ITEM_VERIFICATION_CHAIN_ID`)
+
+## Production Server Deployment (Static Frontend Releases)
+
+For the existing production layout where the frontend is served from a path
+like `/var/www/izipublish.com/current` and the backend is an independently
+managed Docker container, use the source-controlled server deploy script:
+
+```bash
+./scripts/deploy-server.sh --frontend
+```
+
+It uses the following safe release flow:
+
+1. Syncs the frontend checkout in `repos/` (unless `--no-sync` is used).
+2. Builds `artifacts/frontend/dist` (unless `--no-build` or `--dist DIR` is
+   used).
+3. Copies it to a new `releases/<UTC timestamp>` directory.
+4. Atomically repoints `current` to that release.
+5. Retains the configured number of releases for rollback.
+
+It does not overwrite `public_html`, `images`, `backups`, `.htaccess`, or a
+backend container. Images and `.htaccess` are copied into each release by
+default, preserving the behavior of the existing server script.
+
+### One-time server setup
+
+Clone this repository on the server, create its ignored `.env`, and set the
+following values there (not in Git):
+
+```bash
+cp .env.example .env
+# Edit .env:
+FRONTEND_DEPLOY_ROOT=/var/www/izipublish.com
+FRONTEND_DEPLOY_OWNER_GROUP=www-data:www-data
+FRONTEND_DEPLOY_KEEP_RELEASES=5
+```
+
+Then, for each normal frontend release:
+
+```bash
+./scripts/release-server.sh --frontend
+```
+
+`release-server.sh` first fast-forward updates the deployment repository and
+then runs the frontend release workflow. It refuses to pull if tracked server
+files were edited, but ignored server-local `.env` settings are unaffected.
+
+Check the planned changes first without writing anything:
+
+```bash
+./scripts/deploy-server.sh --frontend --dry-run
+```
+
+Inspect releases or roll back instantly by changing only the `current`
+symlink:
+
+```bash
+./scripts/deploy-server.sh --frontend --status
+./scripts/deploy-server.sh --frontend --list-releases
+./scripts/deploy-server.sh --frontend --rollback 20260726_215755
+```
+
+### Existing backend container
+
+The script intentionally does not guess a `docker run` replacement for the
+backend: that could lose its current volume mounts, environment variables,
+ports, restart policy, or database connection. Once its existing deployment
+command is known and saved as a server-local wrapper, set this ignored `.env`
+value:
+
+```bash
+BACKEND_DEPLOY_COMMAND='./server/deploy-backend-existing.sh'
+```
+
+`deploy-backend-existing.sh` should contain the already known-good backend
+build/restart procedure and remain server-local if it includes secrets. Then
+one command deploys both, running the backend step before switching the
+frontend symlink:
+
+```bash
+./scripts/release-server.sh --all
+```
+
+Run `./scripts/deploy-server.sh --help` for every available flag.
 
 ## Frontend Deployment Help
 

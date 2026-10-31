@@ -1,4 +1,4 @@
-FROM maven:3.9.9-eclipse-temurin-25 AS build
+FROM maven:3.9.9-eclipse-temurin-23 AS build
 
 ARG BACKEND_SOURCE_DIR=./repos/easy_publish_backend
 WORKDIR /src

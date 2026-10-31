@@ -16,6 +16,7 @@ Checks for:
   - bash
   - git
   - curl
+  - rsync
   - docker
   - docker compose (plugin) OR docker-compose (standalone)
 USAGE
@@ -82,6 +83,7 @@ run_checks() {
   check_cmd bash "bash" || missing=1
   check_cmd git "git" || missing=1
   check_cmd curl "curl" || missing=1
+  check_cmd rsync "rsync"
   check_cmd docker "docker" || missing=1
 
   if command -v docker >/dev/null 2>&1; then
@@ -121,7 +123,7 @@ install_requirements_debian_ubuntu() {
 
   echo "[install] Installing base packages"
   $sudo_cmd apt-get update
-  $sudo_cmd apt-get install -y bash git curl ca-certificates
+  $sudo_cmd apt-get install -y bash git curl rsync ca-certificates
 
   if ! command -v docker >/dev/null 2>&1; then
     echo "[install] Installing docker.io"

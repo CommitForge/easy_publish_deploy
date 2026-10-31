@@ -84,7 +84,7 @@ build_backend_artifact() {
   elif command -v mvn >/dev/null 2>&1; then
     (cd "$dir" && mvn -DskipTests package)
   elif command -v docker >/dev/null 2>&1; then
-    (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace maven:3.9.9-eclipse-temurin-25 mvn -DskipTests package)
+    (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace maven:3.9.9-eclipse-temurin-23 mvn -DskipTests package)
   else
     echo "[build-products] Maven is required (mvn, mvnw, or docker fallback)." >&2
     exit 1
@@ -111,9 +111,17 @@ build_frontend_artifact() {
 
   echo "[build-products] Building frontend dist"
   if command -v npm >/dev/null 2>&1; then
-    (cd "$dir" && npm install && npm run build)
+    if [[ -f "$dir/package-lock.json" ]]; then
+      (cd "$dir" && npm ci && npm run build)
+    else
+      (cd "$dir" && npm install && npm run build)
+    fi
   elif command -v docker >/dev/null 2>&1; then
-    (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace node:22-bullseye sh -lc "npm install && npm run build")
+    if [[ -f "$dir/package-lock.json" ]]; then
+      (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace node:22-bullseye sh -lc "npm ci && npm run build")
+    else
+      (cd "$dir" && docker run --rm -v "$dir:/workspace" -w /workspace node:22-bullseye sh -lc "npm install && npm run build")
+    fi
   else
     echo "[build-products] npm is required (npm or docker fallback)." >&2
     exit 1

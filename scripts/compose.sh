@@ -46,6 +46,8 @@ DETACH=false
 NO_SYNC=false
 PROFILE="all"
 SERVICES=()
+STAGED_BUILD_CONTEXT=""
+STAGED_TARGET_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -118,6 +120,93 @@ if [[ "$NO_SYNC" == "false" && ( "$ACTION" == "up" || "$ACTION" == "build" ) ]];
   TARGET_DIR="${TARGET_DIR:-$ROOT_DIR/repos}" "$ROOT_DIR/scripts/sync_and_build.sh" "${sync_args[@]}"
 fi
 
+cleanup_staged_build_context() {
+  if [[ -n "$STAGED_BUILD_CONTEXT" && -d "$STAGED_BUILD_CONTEXT" ]]; then
+    rm -rf -- "$STAGED_BUILD_CONTEXT"
+  fi
+}
+
+target_dir_from_env_file() {
+  local line
+
+  [[ -f "$ENV_FILE" ]] || return 0
+  while IFS= read -r line; do
+    case "$line" in
+      TARGET_DIR=*)
+        printf '%s\n' "${line#TARGET_DIR=}"
+        return 0
+        ;;
+    esac
+  done < "$ENV_FILE"
+}
+
+stage_project_for_docker() {
+  local source_root="$1"
+  local project_name="$2"
+  local source_dir="$source_root/$project_name"
+  local destination_dir="$STAGED_BUILD_CONTEXT/$project_name"
+
+  if [[ ! -d "$source_dir" ]]; then
+    echo "[compose] Source project missing: $source_dir" >&2
+    exit 1
+  fi
+
+  source_dir="$(readlink -f "$source_dir")"
+  mkdir -p "$destination_dir"
+  rsync -a --delete \
+    --exclude='/.git/' \
+    --exclude='**/node_modules/***' \
+    --exclude='**/target/***' \
+    --exclude='**/dist/***' \
+    --exclude='**/.codex/***' \
+    --exclude='**/.lh/***' \
+    "$source_dir/" "$destination_dir/"
+}
+
+stage_docker_sources() {
+  local configured_target_dir="${TARGET_DIR:-}"
+  local source_root
+
+  if [[ -z "$configured_target_dir" ]]; then
+    configured_target_dir="$(target_dir_from_env_file)"
+  fi
+  configured_target_dir="${configured_target_dir:-./repos}"
+
+  if [[ "$configured_target_dir" == /* ]]; then
+    source_root="$configured_target_dir"
+  else
+    source_root="$ROOT_DIR/${configured_target_dir#./}"
+  fi
+
+  if [[ ! -d "$source_root" ]]; then
+    echo "[compose] Source checkout directory missing: $source_root" >&2
+    exit 1
+  fi
+
+  STAGED_BUILD_CONTEXT="$(mktemp -d "$ROOT_DIR/.docker-build-context.XXXXXX")"
+  trap cleanup_staged_build_context EXIT
+
+  case "$PROFILE" in
+    backend)
+      stage_project_for_docker "$source_root" "easy_publish_backend"
+      ;;
+    frontend)
+      stage_project_for_docker "$source_root" "easy_publish_frontend"
+      ;;
+    all)
+      stage_project_for_docker "$source_root" "easy_publish_backend"
+      stage_project_for_docker "$source_root" "easy_publish_frontend"
+      ;;
+  esac
+
+  STAGED_TARGET_DIR="./$(basename "$STAGED_BUILD_CONTEXT")"
+  echo "[compose] Staged Docker sources from $source_root"
+}
+
+if [[ "$ACTION" == "build" || ( "$ACTION" == "up" && "$BUILD" == "true" ) ]]; then
+  stage_docker_sources
+fi
+
 compose_cmd=("${compose_bin[@]}" --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 
 case "$ACTION" in
@@ -159,4 +248,8 @@ case "$ACTION" in
 esac
 
 echo "[compose] Running: ${cmd[*]}"
-"${cmd[@]}"
+if [[ -n "$STAGED_TARGET_DIR" ]]; then
+  TARGET_DIR="$STAGED_TARGET_DIR" "${cmd[@]}"
+else
+  "${cmd[@]}"
+fi
