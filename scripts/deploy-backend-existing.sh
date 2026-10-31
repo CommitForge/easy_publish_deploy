@@ -104,6 +104,11 @@ done
 
 ROLLBACK="${ROLLBACK:-false}"
 
+# Keep explicit CLI choices separate from variables a server-local .env may
+# happen to use for another service.
+CLI_CONTAINER_NAME="$CONTAINER_NAME"
+CLI_IMAGE_NAME="$IMAGE_NAME"
+
 [[ -f "$ENV_FILE" ]] || die "Missing environment file: $ENV_FILE"
 set -a
 # shellcheck source=/dev/null
@@ -111,8 +116,8 @@ source "$ENV_FILE"
 set +a
 
 # Explicit command-line values win over .env values.
-CONTAINER_NAME="${CONTAINER_NAME:-${BACKEND_CONTAINER_NAME:-izipublish}}"
-IMAGE_NAME="${IMAGE_NAME:-${BACKEND_IMAGE_NAME:-izipublish:latest}}"
+CONTAINER_NAME="${CLI_CONTAINER_NAME:-${BACKEND_CONTAINER_NAME:-izipublish}}"
+IMAGE_NAME="${CLI_IMAGE_NAME:-${BACKEND_IMAGE_NAME:-izipublish:latest}}"
 WAIT_SECONDS="${BACKEND_START_WAIT_SECONDS:-$WAIT_SECONDS}"
 
 [[ "$CONTAINER_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die "Invalid container name."
@@ -197,6 +202,7 @@ build_image() {
 }
 
 declare -a RUN_ARGS=()
+RUNTIME_ARGUMENTS_READY=false
 
 append_preserved_environment() {
   local container="$1"
@@ -204,12 +210,16 @@ append_preserved_environment() {
   old_image_id="$(docker inspect --format '{{.Image}}' "$container")"
 
   declare -A image_environment=()
-  local entry key
+  local entry key base_environment
+  # Capture this before the replacement image is built. If the old image is
+  # already unavailable, retaining every container environment value is safer
+  # than silently dropping an operator-provided setting.
+  base_environment="$(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$old_image_id" 2>/dev/null || true)"
   while IFS= read -r entry; do
     [[ -n "$entry" ]] || continue
     key="${entry%%=*}"
     image_environment["$key"]="$entry"
-  done < <(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$old_image_id")
+  done <<< "$base_environment"
 
   while IFS= read -r entry; do
     [[ -n "$entry" ]] || continue
@@ -274,6 +284,7 @@ prepare_runtime_arguments() {
   append_preserved_mounts "$container"
   append_preserved_ports "$container"
   append_preserved_restart_and_network "$container"
+  RUNTIME_ARGUMENTS_READY=true
 }
 
 wait_for_running() {
@@ -287,12 +298,32 @@ wait_for_running() {
   return 1
 }
 
+restore_previous_container() {
+  local previous_name message
+  previous_name="$(previous_container_name)"
+  message="$1"
+
+  # A failed `docker run` may leave a stopped container holding the original
+  # name. Remove only that newly created container before restoring the old
+  # one; the old container is retained under the explicit previous name.
+  if container_exists "$CONTAINER_NAME"; then
+    docker rm -f "$CONTAINER_NAME" >/dev/null || true
+  fi
+
+  container_exists "$previous_name" || die "$message The previous container is unavailable; inspect Docker before taking further action."
+  docker rename "$previous_name" "$CONTAINER_NAME"
+  docker start "$CONTAINER_NAME" >/dev/null
+  die "$message The previous backend was restored."
+}
+
 replace_container() {
   local previous_name
   previous_name="$(previous_container_name)"
   container_exists "$CONTAINER_NAME" || die "Existing backend container not found: $CONTAINER_NAME"
-  assert_supported_runtime "$CONTAINER_NAME"
-  prepare_runtime_arguments "$CONTAINER_NAME"
+  if [[ "$RUNTIME_ARGUMENTS_READY" != "true" ]]; then
+    assert_supported_runtime "$CONTAINER_NAME"
+    prepare_runtime_arguments "$CONTAINER_NAME"
+  fi
 
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "[backend-deploy] DRY RUN: would replace $CONTAINER_NAME with newly built $IMAGE_NAME."
@@ -312,16 +343,11 @@ replace_container() {
   docker rename "$CONTAINER_NAME" "$previous_name"
 
   if ! docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "$IMAGE_NAME" >/dev/null; then
-    docker rename "$previous_name" "$CONTAINER_NAME"
-    docker start "$CONTAINER_NAME" >/dev/null
-    die "New container could not start; the previous backend was restored."
+    restore_previous_container "New container could not start."
   fi
 
   if ! wait_for_running; then
-    docker rm -f "$CONTAINER_NAME" >/dev/null || true
-    docker rename "$previous_name" "$CONTAINER_NAME"
-    docker start "$CONTAINER_NAME" >/dev/null
-    die "New container stopped during startup; the previous backend was restored."
+    restore_previous_container "New container stopped during startup."
   fi
 
   echo "[backend-deploy] Backend is running. The prior stopped container is retained as $previous_name."
@@ -334,6 +360,7 @@ fi
 
 container_exists "$CONTAINER_NAME" || die "Existing backend container not found: $CONTAINER_NAME"
 assert_supported_runtime "$CONTAINER_NAME"
+prepare_runtime_arguments "$CONTAINER_NAME"
 
 if [[ "$DRY_RUN" == "true" ]]; then
   echo "[backend-deploy] DRY RUN: would use the configured backend checkout and image $IMAGE_NAME."
