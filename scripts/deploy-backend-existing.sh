@@ -201,6 +201,7 @@ build_image() {
   rsync -a --delete \
     --include='package*.json' \
     --include='*.js' \
+    --include='*.mjs' \
     --exclude='*' \
     "$source_dir/node/" "$BUILD_CONTEXT/repos/easy_publish_backend/node/"
   mkdir -p "$BUILD_CONTEXT/repos/easy_publish_cli"

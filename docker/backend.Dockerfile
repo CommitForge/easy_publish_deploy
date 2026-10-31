@@ -40,7 +40,9 @@ RUN apt-get update && \
 WORKDIR /app/node
 COPY --from=build /src/node/package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
-COPY --from=build /src/node/*.js ./
+# The staged node directory contains only package metadata and executable
+# JavaScript modules, including the .mjs dashboard/analyzer scripts.
+COPY --from=build /src/node/ ./
 
 # Node commands run from both /app and /app/node. An explicit environment
 # value gives every command the same self-contained CLI location.
