@@ -387,7 +387,8 @@ symlink:
 standalone `izipublish` backend container. It obtains the runtime environment,
 port bindings, read-only config mount, restart policy, and single network from
 the running container without printing their values. It builds in a temporary
-context that excludes `.env` and other local files. If the new process cannot
+context that excludes `.env` and other local files, including the required
+`easy_publish_cli` package for chain synchronization. If the new process cannot
 remain running, the script automatically restores the previous container.
 
 The previous stopped container is retained as `izipublish-previous`; it can be

@@ -23,6 +23,7 @@ services:
       dockerfile: docker/backend.Dockerfile
       args:
         BACKEND_SOURCE_DIR: ${TARGET_DIR:-./repos}/easy_publish_backend
+        CLI_SOURCE_DIR: ${TARGET_DIR:-./repos}/easy_publish_cli
     restart: unless-stopped
     env_file:
       - .env

@@ -103,7 +103,7 @@ if [[ "$NO_SYNC" == "false" && ( "$ACTION" == "up" || "$ACTION" == "build" ) ]];
   sync_args=()
   case "$PROFILE" in
     backend)
-      sync_args+=(--no-frontend --no-cli)
+      sync_args+=(--no-frontend)
       ;;
     frontend)
       sync_args+=(--no-backend --no-cli)
@@ -189,12 +189,14 @@ stage_docker_sources() {
   case "$PROFILE" in
     backend)
       stage_project_for_docker "$source_root" "easy_publish_backend"
+      stage_project_for_docker "$source_root" "easy_publish_cli"
       ;;
     frontend)
       stage_project_for_docker "$source_root" "easy_publish_frontend"
       ;;
     all)
       stage_project_for_docker "$source_root" "easy_publish_backend"
+      stage_project_for_docker "$source_root" "easy_publish_cli"
       stage_project_for_docker "$source_root" "easy_publish_frontend"
       ;;
   esac

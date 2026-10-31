@@ -173,13 +173,15 @@ assert_supported_runtime() {
 
 sync_backend() {
   [[ "$SYNC" == "true" ]] || return 0
-  echo "[backend-deploy] Syncing backend Git checkout"
-  "$ROOT_DIR/scripts/sync_and_build.sh" --no-frontend --no-cli
+  echo "[backend-deploy] Syncing backend and CLI Git checkouts"
+  "$ROOT_DIR/scripts/sync_and_build.sh" --no-frontend
 }
 
 build_image() {
   local source_dir="$ROOT_DIR/repos/easy_publish_backend"
+  local cli_source_dir="$ROOT_DIR/repos/easy_publish_cli"
   [[ -d "$source_dir" ]] || die "Backend source is missing: $source_dir"
+  [[ -d "$cli_source_dir" ]] || die "CLI source is missing: $cli_source_dir"
   command -v rsync >/dev/null 2>&1 || die "rsync is required to build a secret-free Docker context."
 
   BUILD_CONTEXT="$(mktemp -d "$ROOT_DIR/.backend-docker-build-context.XXXXXX")"
@@ -201,10 +203,21 @@ build_image() {
     --include='*.js' \
     --exclude='*' \
     "$source_dir/node/" "$BUILD_CONTEXT/repos/easy_publish_backend/node/"
+  mkdir -p "$BUILD_CONTEXT/repos/easy_publish_cli"
+  for cli_file in package.json package-lock.json izipub.js; do
+    [[ ! -f "$cli_source_dir/$cli_file" ]] || cp "$cli_source_dir/$cli_file" "$BUILD_CONTEXT/repos/easy_publish_cli/$cli_file"
+  done
+  [[ -f "$BUILD_CONTEXT/repos/easy_publish_cli/package.json" ]] || die "CLI package.json is missing."
+  [[ -f "$BUILD_CONTEXT/repos/easy_publish_cli/izipub.js" ]] || die "CLI izipub.js is missing."
+  rsync -a --delete \
+    --exclude='**/.env' \
+    --exclude='**/.env.*' \
+    "$cli_source_dir/lib/" "$BUILD_CONTEXT/repos/easy_publish_cli/lib/"
 
   echo "[backend-deploy] Building backend image"
   docker build \
     --build-arg BACKEND_SOURCE_DIR=./repos/easy_publish_backend \
+    --build-arg CLI_SOURCE_DIR=./repos/easy_publish_cli \
     --tag "$IMAGE_NAME" \
     --file "$BUILD_CONTEXT/Dockerfile" \
     "$BUILD_CONTEXT"
