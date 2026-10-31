@@ -26,7 +26,9 @@ Examples:
 The normal frontend command is one step:
   ./scripts/release-server.sh --frontend
 
-For --all, configure BACKEND_DEPLOY_COMMAND once in the server-local .env.
+For --all, the default helper safely replaces the existing standalone
+izipublish container. Configure BACKEND_DEPLOY_COMMAND only for a different
+backend deployment model.
 Run ./scripts/deploy-server.sh --help for deployment and rollback options.
 USAGE
 }

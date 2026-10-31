@@ -3,10 +3,9 @@
 # directory (for example /var/www/izipublish.com/current) and runs the backend
 # independently in Docker.
 #
-# The script deliberately does not invent a `docker run` command for an
-# existing backend container: its ports, volumes, environment, and database
-# are server settings. Configure BACKEND_DEPLOY_COMMAND once in .env if this
-# script should deploy the backend too.
+# The default backend helper reconstructs the current standalone container's
+# essential runtime settings without printing their values. A custom backend
+# command can still be configured in .env for another deployment model.
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -59,7 +58,9 @@ Optional .env values:
   FRONTEND_DEPLOY_KEEP_RELEASES=5
   FRONTEND_DEPLOY_COPY_IMAGES=true
   FRONTEND_DEPLOY_COPY_HTACCESS=true
-  BACKEND_DEPLOY_COMMAND='...existing safe backend deploy command...'
+  BACKEND_DEPLOY_COMMAND='./scripts/deploy-backend-existing.sh'
+  BACKEND_CONTAINER_NAME=izipublish
+  BACKEND_IMAGE_NAME=izipublish:latest
 
 Examples:
   # Normal static-frontend deployment: sync, build, atomically activate.
@@ -71,7 +72,7 @@ Examples:
   # Retry an already built artifact without Git or a new frontend build.
   ./scripts/deploy-server.sh --frontend --no-sync --no-build
 
-  # Deploy both only after BACKEND_DEPLOY_COMMAND is configured in .env.
+  # Deploy both with the default safe standalone-container replacement.
   ./scripts/deploy-server.sh --all
 
   # Roll back the frontend symlink without building or deleting a release.
@@ -225,7 +226,7 @@ FRONTEND_DEPLOY_OWNER_GROUP="${FRONTEND_DEPLOY_OWNER_GROUP:-www-data:www-data}"
 FRONTEND_DEPLOY_KEEP_RELEASES="${KEEP_RELEASES_OVERRIDE:-${FRONTEND_DEPLOY_KEEP_RELEASES:-5}}"
 FRONTEND_DEPLOY_COPY_IMAGES="${FRONTEND_DEPLOY_COPY_IMAGES:-true}"
 FRONTEND_DEPLOY_COPY_HTACCESS="${FRONTEND_DEPLOY_COPY_HTACCESS:-true}"
-BACKEND_DEPLOY_COMMAND="${BACKEND_DEPLOY_COMMAND:-}"
+BACKEND_DEPLOY_COMMAND="${BACKEND_DEPLOY_COMMAND:-$ROOT_DIR/scripts/deploy-backend-existing.sh}"
 
 if [[ -n "$DIST_DIR_OVERRIDE" && "$DIST_DIR_OVERRIDE" != /* ]]; then
   DIST_DIR_OVERRIDE="$ROOT_DIR/${DIST_DIR_OVERRIDE#./}"
@@ -427,7 +428,7 @@ rollback_frontend() {
 }
 
 deploy_backend() {
-  [[ -n "$BACKEND_DEPLOY_COMMAND" ]] || die "BACKEND_DEPLOY_COMMAND is not configured. Refusing to guess how to replace the existing backend container. Use --frontend now, or configure this once in $ENV_FILE."
+  [[ -n "$BACKEND_DEPLOY_COMMAND" ]] || die "BACKEND_DEPLOY_COMMAND is empty. Use the default helper or configure a custom backend deployment command in $ENV_FILE."
 
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "[deploy-server] DRY RUN: would run configured backend deploy command from $ROOT_DIR"
@@ -472,7 +473,7 @@ fi
 
 frontend_build_dir=""
 if is_product_with_backend && [[ -z "$BACKEND_DEPLOY_COMMAND" ]]; then
-  die "BACKEND_DEPLOY_COMMAND is not configured. Refusing to guess how to replace the existing backend container. Use --frontend now, or configure this once in $ENV_FILE."
+  die "BACKEND_DEPLOY_COMMAND is empty. Use the default helper or configure a custom backend deployment command in $ENV_FILE."
 fi
 
 if is_product_with_frontend; then

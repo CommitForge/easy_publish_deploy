@@ -8,6 +8,7 @@ repos/
 # Build outputs
 artifacts/
 .docker-build-context.*
+.backend-docker-build-context.*
 
 # OS/editor
 .DS_Store

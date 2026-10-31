@@ -383,20 +383,23 @@ symlink:
 
 ### Existing backend container
 
-The script intentionally does not guess a `docker run` replacement for the
-backend: that could lose its current volume mounts, environment variables,
-ports, restart policy, or database connection. Once its existing deployment
-command is known and saved as a server-local wrapper, set this ignored `.env`
-value:
+`scripts/deploy-backend-existing.sh` safely rebuilds and replaces the existing
+standalone `izipublish` backend container. It obtains the runtime environment,
+port bindings, read-only config mount, restart policy, and single network from
+the running container without printing their values. It builds in a temporary
+context that excludes `.env` and other local files. If the new process cannot
+remain running, the script automatically restores the previous container.
+
+The previous stopped container is retained as `izipublish-previous`; it can be
+restored with:
 
 ```bash
-BACKEND_DEPLOY_COMMAND='./server/deploy-backend-existing.sh'
+./scripts/deploy-backend-existing.sh --rollback
 ```
 
-`deploy-backend-existing.sh` should contain the already known-good backend
-build/restart procedure and remain server-local if it includes secrets. Then
-one command deploys both, running the backend step before switching the
-frontend symlink:
+For a different container/image name, set the documented `BACKEND_*` values in
+the server-local `.env`. Otherwise, one command deploys both products, running
+the backend replacement before switching the frontend symlink:
 
 ```bash
 ./scripts/release-server.sh --all
